@@ -8,12 +8,8 @@ import {
 } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { PlayableMediaList, PoLRYTubeItem } from "../utils/utils";
+import { getSummary, peekSummary } from "../utils/folder-summary";
 import { ForwardBurgerIcon, PlayIcon, RadioTowerIcon } from "../utils/icons";
-
-// Mosaic thumbnails are cached per entity + folder so re-renders and
-// navigating back don't re-query the integration.
-const mosaicCache = new Map<string, Promise<string[]>>();
-const MOSAIC_SIZE = 4;
 
 @customElement("polr-ytube-grid-item")
 export class PoLRYTubeGridItem extends LitElement {
@@ -44,55 +40,18 @@ export class PoLRYTubeGridItem extends LitElement {
         if (this.element.thumbnail || !this.element.can_expand) return;
         if (!this.hass || !this.entity) return;
 
-        const key = `${this.entity.entity_id}|${this.element.media_content_type}|${this.element.media_content_id}`;
-        let pending = mosaicCache.get(key);
-        if (!pending) {
-            pending = this._fetchMosaic(
-                this.element.media_content_type,
-                this.element.media_content_id,
-                1
-            );
-            mosaicCache.set(key, pending);
-        }
-        this._mosaic = await pending;
+        const { entity_id } = this.entity;
+        const { media_content_type: type, media_content_id: id } =
+            this.element;
+
+        // Show the cached mosaic immediately, then refresh it.
+        const cached = peekSummary(entity_id, type, id);
+        if (cached) this._mosaic = cached.thumbs;
+
+        const fresh = await getSummary(this.hass, entity_id, type, id);
+        if (fresh) this._mosaic = fresh.thumbs;
     }
 
-    // Collect up to MOSAIC_SIZE child thumbnails; if the children have none
-    // (e.g. a "Home" folder of shelves), look one level deeper.
-    private async _fetchMosaic(
-        type: string,
-        id: string,
-        depth: number
-    ): Promise<string[]> {
-        try {
-            const response = await this.hass.callWS({
-                type: "media_player/browse_media",
-                entity_id: this.entity.entity_id,
-                media_content_type: type,
-                media_content_id: id,
-            });
-            const children: any[] = response?.children ?? [];
-            const thumbs = [
-                ...new Set(
-                    children.map((c) => c.thumbnail).filter((t) => !!t)
-                ),
-            ].slice(0, MOSAIC_SIZE) as string[];
-
-            if (thumbs.length > 0 || depth <= 0) return thumbs;
-
-            for (const child of children.filter((c) => c.can_expand)) {
-                const nested = await this._fetchMosaic(
-                    child.media_content_type,
-                    child.media_content_id,
-                    depth - 1
-                );
-                if (nested.length > 0) return nested;
-            }
-        } catch (e) {
-            console.warn("Unable to build mosaic thumbnail", e);
-        }
-        return [];
-    }
 
     render() {
         return html`

@@ -53,6 +53,8 @@ export class PoLRYTubeBrowser extends LitElement {
                     .entity=${this.entity}
                     @navigate=${(ev) => this._browse(ev.detail.action)}
                     .grid=${this.coverNavigation}
+                    .hideEmpty=${this._browseHistory.length <= 1 &&
+                    !this._isSearchResults}
                     columns=${this.coverNavigation ? "3" : "1"}
                 ></polr-ytube-list>
             </div>

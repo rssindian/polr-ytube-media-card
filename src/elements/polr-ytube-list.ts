@@ -1,6 +1,7 @@
 import { LitElement, html, css, CSSResultGroup } from "lit";
 import { customElement, state, property } from "lit/decorators.js";
 import { isNumeric, PoLRYTubeItem, PoLRYTubeListState } from "../utils/utils";
+import { getSummary, peekSummary } from "../utils/folder-summary";
 import "./polr-ytube-list-item";
 import "./polr-ytube-grid-item";
 
@@ -12,6 +13,60 @@ export class PoLRYTubeList extends LitElement {
     @state() public state: PoLRYTubeListState;
     @property() public columns: Number = 1;
     @property() public grid: Boolean = false;
+    // When set, expandable folders known to be empty are not shown.
+    @property({ type: Boolean }) public hideEmpty: boolean = false;
+    @state() private _emptyFolders = new Set<string>();
+
+    protected willUpdate(changed: Map<PropertyKey, unknown>): void {
+        if (
+            (changed.has("elements") || changed.has("hideEmpty")) &&
+            this.hideEmpty &&
+            this.elements?.length &&
+            this.entity
+        )
+            this._checkFolders();
+    }
+
+    private _folderKey = (e: PoLRYTubeItem) =>
+        `${e.media_content_type}|${e.media_content_id}`;
+
+    private _checkFolders() {
+        const entityId = this.entity.entity_id;
+        const empty = new Set<string>();
+
+        for (const element of this.elements) {
+            if (!element.can_expand) continue;
+            const key = this._folderKey(element);
+            const cached = peekSummary(
+                entityId,
+                element.media_content_type,
+                element.media_content_id
+            );
+            if (cached?.count === 0) empty.add(key);
+
+            // Verify (or refresh) in the background
+            getSummary(
+                this.hass,
+                entityId,
+                element.media_content_type,
+                element.media_content_id
+            ).then((summary) => {
+                if (!summary) return;
+                const next = new Set(this._emptyFolders);
+                if (summary.count === 0) next.add(key);
+                else next.delete(key);
+                this._emptyFolders = next;
+            });
+        }
+        this._emptyFolders = empty;
+    }
+
+    private get _visibleElements(): PoLRYTubeItem[] {
+        if (!this.hideEmpty) return this.elements;
+        return this.elements.filter(
+            (e) => !(e.can_expand && this._emptyFolders.has(this._folderKey(e)))
+        );
+    }
 
     render() {
         if (this.state == PoLRYTubeListState.LOADING) {
@@ -27,11 +82,11 @@ export class PoLRYTubeList extends LitElement {
         }
 
         if (this.state == PoLRYTubeListState.HAS_RESULTS) {
-            if (this.elements.length == 0) return html``;
+            if (this._visibleElements.length == 0) return html``;
 
             let renderedElements;
             if (this.grid) {
-                renderedElements = this.elements.map((element) => {
+                renderedElements = this._visibleElements.map((element) => {
                     return html`
                         <polr-ytube-grid-item
                             .hass=${this.hass}
@@ -44,7 +99,7 @@ export class PoLRYTubeList extends LitElement {
                     `;
                 });
             } else {
-                renderedElements = this.elements.map((element) => {
+                renderedElements = this._visibleElements.map((element) => {
                     return html`
                         <polr-ytube-list-item
                             .hass=${this.hass}
