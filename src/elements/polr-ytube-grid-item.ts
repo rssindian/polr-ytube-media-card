@@ -10,12 +10,18 @@ import { customElement, property, state } from "lit/decorators.js";
 import { PlayableMediaList, PoLRYTubeItem } from "../utils/utils";
 import { ForwardBurgerIcon, PlayIcon, RadioTowerIcon } from "../utils/icons";
 
+// Mosaic thumbnails are cached per entity + folder so re-renders and
+// navigating back don't re-query the integration.
+const mosaicCache = new Map<string, Promise<string[]>>();
+const MOSAIC_SIZE = 4;
+
 @customElement("polr-ytube-grid-item")
 export class PoLRYTubeGridItem extends LitElement {
     @state() public entity: any;
     @state() public hass: any;
     @state() public element: PoLRYTubeItem;
     @state() public current: boolean;
+    @state() private _mosaic: string[] = [];
     private _primaryAction: any;
     private _actions: any[] = [];
     private _hasAdditionalActions: boolean = false;
@@ -31,6 +37,61 @@ export class PoLRYTubeGridItem extends LitElement {
                 ? this.element.can_expand
                 : this.element.media_content_type == "track";
         this.requestUpdate();
+        this._loadMosaic();
+    }
+
+    private async _loadMosaic() {
+        if (this.element.thumbnail || !this.element.can_expand) return;
+        if (!this.hass || !this.entity) return;
+
+        const key = `${this.entity.entity_id}|${this.element.media_content_type}|${this.element.media_content_id}`;
+        let pending = mosaicCache.get(key);
+        if (!pending) {
+            pending = this._fetchMosaic(
+                this.element.media_content_type,
+                this.element.media_content_id,
+                1
+            );
+            mosaicCache.set(key, pending);
+        }
+        this._mosaic = await pending;
+    }
+
+    // Collect up to MOSAIC_SIZE child thumbnails; if the children have none
+    // (e.g. a "Home" folder of shelves), look one level deeper.
+    private async _fetchMosaic(
+        type: string,
+        id: string,
+        depth: number
+    ): Promise<string[]> {
+        try {
+            const response = await this.hass.callWS({
+                type: "media_player/browse_media",
+                entity_id: this.entity.entity_id,
+                media_content_type: type,
+                media_content_id: id,
+            });
+            const children: any[] = response?.children ?? [];
+            const thumbs = [
+                ...new Set(
+                    children.map((c) => c.thumbnail).filter((t) => !!t)
+                ),
+            ].slice(0, MOSAIC_SIZE) as string[];
+
+            if (thumbs.length > 0 || depth <= 0) return thumbs;
+
+            for (const child of children.filter((c) => c.can_expand)) {
+                const nested = await this._fetchMosaic(
+                    child.media_content_type,
+                    child.media_content_id,
+                    depth - 1
+                );
+                if (nested.length > 0) return nested;
+            }
+        } catch (e) {
+            console.warn("Unable to build mosaic thumbnail", e);
+        }
+        return [];
     }
 
     render() {
@@ -110,6 +171,17 @@ export class PoLRYTubeGridItem extends LitElement {
     }
 
     private _renderThumbnail(element: PoLRYTubeItem) {
+        if (!element.thumbnail && this._mosaic.length > 0) {
+            return html`<div
+                class="mosaic thumbnail"
+                data-count=${this._mosaic.length}
+            >
+                ${this._mosaic.map(
+                    (src) => html`<img src="${src}" loading="lazy" />`
+                )}
+            </div>`;
+        }
+
         if (element.thumbnail == "") {
             return html`<div class="empty-thumbnail thumbnail">
                 <ha-icon icon="mdi:music-box"></ha-icon>
@@ -222,6 +294,36 @@ export class PoLRYTubeGridItem extends LitElement {
                 .thumbnail {
                     width: 100%;
                     height: 100%;
+                }
+
+                .mosaic {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    grid-template-rows: 1fr 1fr;
+                    gap: 1px;
+                    overflow: hidden;
+                }
+
+                .mosaic img {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                    min-width: 0;
+                    min-height: 0;
+                }
+
+                /* 1 image fills the tile, 2 split it, 3 gives the first a full column */
+                .mosaic[data-count="1"] img {
+                    grid-column: 1 / 3;
+                    grid-row: 1 / 3;
+                }
+
+                .mosaic[data-count="2"] img {
+                    grid-row: 1 / 3;
+                }
+
+                .mosaic[data-count="3"] img:first-child {
+                    grid-row: 1 / 3;
                 }
 
                 .empty-thumbnail {
