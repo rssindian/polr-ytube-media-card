@@ -80,9 +80,17 @@ async function fetchSummary(
         })
     );
     const children: any[] = response?.children ?? [];
-    let thumbs = [
-        ...new Set(children.map((c) => c.thumbnail).filter((t) => !!t)),
-    ].slice(0, MAX_THUMBS) as string[];
+    // Tracks sometimes come back without artwork; derive it from the video id.
+    const thumbOf = (c: any): string =>
+        c.thumbnail ||
+        (c.media_content_type == "track" && c.media_content_id
+            ? `https://i.ytimg.com/vi/${c.media_content_id}/mqdefault.jpg`
+            : "");
+
+    let thumbs = [...new Set(children.map(thumbOf).filter((t) => !!t))].slice(
+        0,
+        MAX_THUMBS
+    ) as string[];
 
     // Children without artwork (e.g. shelves on "Home"): look one level deeper.
     if (thumbs.length == 0 && depth > 0) {
@@ -102,6 +110,14 @@ async function fetchSummary(
         );
         thumbs = nested.find((n) => n && n.thumbs.length > 0)?.thumbs ?? [];
     }
+
+    if (thumbs.length == 0 && children.length > 0)
+        console.debug(
+            "polr-ytube: no thumbnails found for folder",
+            type,
+            id,
+            children.slice(0, 3)
+        );
 
     return { count: children.length, thumbs };
 }

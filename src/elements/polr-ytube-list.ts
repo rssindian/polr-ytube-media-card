@@ -61,10 +61,18 @@ export class PoLRYTubeList extends LitElement {
         this._emptyFolders = empty;
     }
 
+    private _isPlaybackDevice(e: PoLRYTubeItem): boolean {
+        return [e.title, e.media_content_type, e.media_content_id].some((v) =>
+            /^playback[\s_-]?devices?$/i.test(String(v ?? "").trim())
+        );
+    }
+
     private get _visibleElements(): PoLRYTubeItem[] {
         if (!this.hideEmpty) return this.elements;
         return this.elements.filter(
-            (e) => !(e.can_expand && this._emptyFolders.has(this._folderKey(e)))
+            (e) =>
+                !this._isPlaybackDevice(e) &&
+                !(e.can_expand && this._emptyFolders.has(this._folderKey(e)))
         );
     }
 
