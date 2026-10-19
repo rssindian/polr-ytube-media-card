@@ -133,6 +133,9 @@ export function getSummary(
     if (!pending) {
         pending = fetchSummary(hass, entityId, type, id, 1)
             .then((summary) => {
+                const previous = summaries.get(key);
+                if (summary.thumbs.length == 0 && previous?.thumbs.length)
+                    summary.thumbs = previous.thumbs;
                 summaries.set(key, summary);
                 persist();
                 return summary;

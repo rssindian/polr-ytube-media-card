@@ -33,7 +33,15 @@ export class PoLRYTubeGridItem extends LitElement {
                 ? this.element.can_expand
                 : this.element.media_content_type == "track";
         this.requestUpdate();
-        this._loadMosaic();
+    }
+
+    // The element can be swapped on a reused tile, so reload the mosaic
+    // whenever it (or the connection) changes, not just on first render.
+    protected willUpdate(changed: Map<PropertyKey, unknown>): void {
+        if (changed.has("element") || changed.has("entity")) {
+            if (changed.has("element")) this._mosaic = [];
+            this._loadMosaic();
+        }
     }
 
     private async _loadMosaic() {
@@ -48,8 +56,11 @@ export class PoLRYTubeGridItem extends LitElement {
         const cached = peekSummary(entity_id, type, id);
         if (cached) this._mosaic = cached.thumbs;
 
+        const element = this.element;
         const fresh = await getSummary(this.hass, entity_id, type, id);
-        if (fresh) this._mosaic = fresh.thumbs;
+        if (element !== this.element) return; // tile was reused meanwhile
+        if (fresh && (fresh.thumbs.length > 0 || this._mosaic.length == 0))
+            this._mosaic = fresh.thumbs;
     }
 
 
@@ -136,12 +147,12 @@ export class PoLRYTubeGridItem extends LitElement {
                 data-count=${this._mosaic.length}
             >
                 ${this._mosaic.map(
-                    (src) => html`<img src="${src}" loading="lazy" />`
+                    (src) => html`<img src="${src}" />`
                 )}
             </div>`;
         }
 
-        if (element.thumbnail == "") {
+        if (!element.thumbnail) {
             return html`<div class="empty-thumbnail thumbnail">
                 <ha-icon icon="mdi:music-box"></ha-icon>
             </div>`;
