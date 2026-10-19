@@ -48,7 +48,7 @@ export class PoLRYTubePlayingCard extends LitElement {
 
         this._config = structuredClone(config);
         if (!("header" in this._config)) this._config.header = "YouTube Music";
-        if (!("icon" in this._config)) this._config.searchTitle = "mdi:speaker";
+        if (!("icon" in this._config)) this._config.icon = "mdi:speaker";
         if (!("initialAction" in this._config)) {
             this._config.initialAction = new PoLRYTubeItem();
             this._config.initialAction.title = "You";

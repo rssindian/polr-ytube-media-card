@@ -25,7 +25,7 @@ export class PoLRYTubeSearchCard extends LitElement {
         if (!("header" in this._config))
             this._config.header = "YouTube Music Search";
         if (!("showHeader" in this._config)) this._config.showHeader = false;
-        if (!("icon" in this._config)) this._config.searchTitle = "mdi:speaker";
+        if (!("icon" in this._config)) this._config.icon = "mdi:speaker";
     }
 
     set hass(hass) {

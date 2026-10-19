@@ -8,21 +8,7 @@ import ignore from "./rollup-plugins/rollup-ignore-plugin.js";
 
 const dev = process.env.ROLLUP_WATCH;
 
-const IGNORED_FILES = [
-    "@material/mwc-ripple/mwc-ripple.js",
-    "@material/mwc-notched-outline/mwc-notched-outline.js",
-    "@material/mwc-list/mwc-list.js",
-    "@material/mwc-list/mwc-list-item.js",
-    "@material/mwc-menu/mwc-menu-surface.js",
-    "@material/mwc-menu/mwc-menu.js",
-    "@material/mwc-icon/mwc-icon.js",
-    "@material/mwc-tab/mwc-tab.js",
-    "@material/mwc-tab-indicator/mwc-tab-indicator.js",
-    "@material/mwc-tab-scroller/mwc-tab-scroller.js",
-    "@material/web/elevation/elevation.js",
-    "@material/web/focus/md-focus-ring.js",
-    "@material/web/ripple/ripple.js",
-];
+const IGNORED_FILES = [];
 
 export default {
     input: "src/main.ts",
